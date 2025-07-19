@@ -33,13 +33,25 @@ serve(async (req) => {
       throw new Error('No authorization header provided');
     }
 
-    const supabaseAuth = createClient(
+    // Extract the JWT token from the Bearer header
+    const token = authHeader.replace('Bearer ', '');
+    console.log('Token extracted:', !!token);
+
+    // Create Supabase client with the token
+    const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      }
     );
 
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     console.log('User authentication result:', { user: !!user, error: authError });
     
     if (authError || !user) {
@@ -52,13 +64,13 @@ serve(async (req) => {
     const { userId, goals, experience, equipment, timeAvailable, targetMuscles, restrictions } = requestBody as WorkoutRequest;
     
     // Use service role for database operations
-    const supabase = createClient(
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     // Check subscription limits
-    const { data: subscription, error: subError } = await supabase
+    const { data: subscription, error: subError } = await supabaseAdmin
       .from('user_subscriptions')
       .select('ai_requests_used, subscription_plans(ai_requests_limit)')
       .eq('user_id', userId)
@@ -173,7 +185,7 @@ Responda APENAS com o JSON válido, sem texto adicional.`;
     }
 
     // Save workout to database
-    const { data: workoutPlan, error: insertError } = await supabase
+    const { data: workoutPlan, error: insertError } = await supabaseAdmin
       .from('workout_plans')
       .insert({
         user_id: userId,
@@ -195,7 +207,7 @@ Responda APENAS com o JSON válido, sem texto adicional.`;
 
     // Update AI usage counter
     if (subscription) {
-      await supabase
+      await supabaseAdmin
         .from('user_subscriptions')
         .update({ ai_requests_used: subscription.ai_requests_used + 1 })
         .eq('user_id', userId);
