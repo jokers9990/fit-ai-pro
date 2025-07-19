@@ -1,6 +1,7 @@
 import { Bot, Calculator, TrendingUp, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Link } from "react-router-dom";
 import heroImage from "@/assets/gym-hero.jpg";
 
 const Hero = () => {
@@ -27,9 +28,11 @@ const Hero = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="gym-button text-lg px-8 py-4">
-              <Zap className="mr-2 h-5 w-5" />
-              Começar Grátis
+            <Button size="lg" className="gym-button text-lg px-8 py-4" asChild>
+              <Link to="/auth">
+                <Zap className="mr-2 h-5 w-5" />
+                Começar Grátis
+              </Link>
             </Button>
             <Button size="lg" variant="outline" className="text-lg px-8 py-4 border-primary/50 hover:bg-primary/10">
               Ver Demo

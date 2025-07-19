@@ -1,5 +1,6 @@
 import { Dumbbell, User, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const Header = () => {
   return (
@@ -27,12 +28,14 @@ const Header = () => {
         </nav>
 
         <div className="flex items-center space-x-3">
-          <Button variant="ghost" size="sm" className="hidden md:flex">
-            <User className="h-4 w-4 mr-2" />
-            Login
+          <Button variant="ghost" size="sm" className="hidden md:flex" asChild>
+            <Link to="/auth">
+              <User className="h-4 w-4 mr-2" />
+              Login
+            </Link>
           </Button>
-          <Button className="gym-button">
-            Começar Agora
+          <Button className="gym-button" asChild>
+            <Link to="/auth">Começar Agora</Link>
           </Button>
           <Button variant="ghost" size="sm" className="md:hidden">
             <Menu className="h-5 w-5" />
