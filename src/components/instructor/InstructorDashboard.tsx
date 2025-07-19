@@ -35,6 +35,7 @@ interface Student {
 }
 
 interface PhysicalAssessment {
+  age: number;
   weight: number;
   height: number;
   body_fat_percentage?: number;
@@ -51,6 +52,7 @@ export function InstructorDashboard() {
   const [addingStudent, setAddingStudent] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [assessmentForm, setAssessmentForm] = useState<PhysicalAssessment>({
+    age: 0,
     weight: 0,
     height: 0,
     body_fat_percentage: 0,
@@ -279,6 +281,7 @@ export function InstructorDashboard() {
         .insert({
           user_id: selectedStudent.user_id,
           instructor_id: user?.id,
+          age: assessmentForm.age,
           weight: assessmentForm.weight,
           height: assessmentForm.height,
           body_fat_percentage: assessmentForm.body_fat_percentage || null,
@@ -295,7 +298,7 @@ export function InstructorDashboard() {
       });
       
       setIsDialogOpen(false);
-      setAssessmentForm({ weight: 0, height: 0, body_fat_percentage: 0, muscle_mass: 0, notes: '' });
+      setAssessmentForm({ age: 0, weight: 0, height: 0, body_fat_percentage: 0, muscle_mass: 0, notes: '' });
       fetchStudents(); // Refresh data
     } catch (error) {
       console.error('Error creating assessment:', error);
@@ -587,29 +590,65 @@ export function InstructorDashboard() {
                         <DialogHeader>
                           <DialogTitle>Avaliação Física - {student.full_name}</DialogTitle>
                         </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="weight">Peso (kg)</Label>
-                              <Input
-                                id="weight"
-                                type="number"
-                                value={assessmentForm.weight}
-                                onChange={(e) => setAssessmentForm({...assessmentForm, weight: Number(e.target.value)})}
-                                placeholder="70.5"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="height">Altura (cm)</Label>
-                              <Input
-                                id="height"
-                                type="number"
-                                value={assessmentForm.height}
-                                onChange={(e) => setAssessmentForm({...assessmentForm, height: Number(e.target.value)})}
-                                placeholder="175"
-                              />
-                            </div>
-                          </div>
+                         <div className="space-y-4">
+                           <div className="grid grid-cols-3 gap-4">
+                             <div>
+                               <Label htmlFor="age">Idade (anos)</Label>
+                               <Input
+                                 id="age"
+                                 type="number"
+                                 min="1"
+                                 max="120"
+                                 value={assessmentForm.age}
+                                 onChange={(e) => setAssessmentForm({...assessmentForm, age: Number(e.target.value)})}
+                                 placeholder="25"
+                               />
+                             </div>
+                             <div>
+                               <Label htmlFor="weight">Peso (kg)</Label>
+                               <Input
+                                 id="weight"
+                                 type="number"
+                                 step="0.1"
+                                 value={assessmentForm.weight}
+                                 onChange={(e) => setAssessmentForm({...assessmentForm, weight: Number(e.target.value)})}
+                                 placeholder="70.5"
+                               />
+                             </div>
+                             <div>
+                               <Label htmlFor="height">Altura (cm)</Label>
+                               <Input
+                                 id="height"
+                                 type="number"
+                                 value={assessmentForm.height}
+                                 onChange={(e) => setAssessmentForm({...assessmentForm, height: Number(e.target.value)})}
+                                 placeholder="175"
+                               />
+                             </div>
+                           </div>
+                           
+                           {/* Preview do IMC */}
+                           {assessmentForm.weight > 0 && assessmentForm.height > 0 && (
+                             <div className="p-3 bg-muted rounded-lg">
+                               <div className="flex items-center justify-between">
+                                 <span className="text-sm font-medium">IMC Calculado:</span>
+                                 <div className="text-right">
+                                   <div className="text-lg font-bold text-primary">
+                                     {(assessmentForm.weight / Math.pow(assessmentForm.height / 100, 2)).toFixed(1)}
+                                   </div>
+                                   <div className="text-xs text-muted-foreground">
+                                     {(() => {
+                                       const bmi = assessmentForm.weight / Math.pow(assessmentForm.height / 100, 2);
+                                       if (bmi < 18.5) return 'Abaixo do peso';
+                                       if (bmi < 25) return 'Peso normal';
+                                       if (bmi < 30) return 'Sobrepeso';
+                                       return 'Obesidade';
+                                     })()}
+                                   </div>
+                                 </div>
+                               </div>
+                             </div>
+                           )}
                           
                           <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -645,13 +684,13 @@ export function InstructorDashboard() {
                             />
                           </div>
                           
-                          <Button 
-                            onClick={createPhysicalAssessment}
-                            disabled={creatingAssessment || !assessmentForm.weight || !assessmentForm.height}
-                            className="w-full"
-                          >
-                            {creatingAssessment ? 'Criando...' : 'Criar Avaliação'}
-                          </Button>
+                           <Button 
+                             onClick={createPhysicalAssessment}
+                             disabled={creatingAssessment || !assessmentForm.age || !assessmentForm.weight || !assessmentForm.height}
+                             className="w-full"
+                           >
+                             {creatingAssessment ? 'Criando...' : 'Criar Avaliação'}
+                           </Button>
                         </div>
                       </DialogContent>
                     </Dialog>

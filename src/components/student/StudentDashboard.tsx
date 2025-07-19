@@ -277,40 +277,66 @@ export function StudentDashboard() {
         </Card>
       </div>
 
-      {/* Avaliação física */}
+      {/* Perfil do Aluno - Minimalista */}
       {stats.lastAssessment && (
         <Card>
           <CardHeader>
-            <CardTitle>Última Avaliação Física</CardTitle>
-            <CardDescription>
-              Realizada em {new Date(stats.lastAssessment.assessment_date).toLocaleDateString('pt-BR')}
-            </CardDescription>
+            <CardTitle className="flex items-center justify-between">
+              <span>Perfil do Aluno</span>
+              <Badge variant="outline" className="text-xs">
+                Atualizado em {new Date(stats.lastAssessment.assessment_date).toLocaleDateString('pt-BR')}
+              </Badge>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">
-                  {stats.lastAssessment.weight}kg
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Dados Básicos */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground">DADOS BÁSICOS</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-xl font-bold">{stats.lastAssessment.age || '--'}</div>
+                    <p className="text-xs text-muted-foreground">anos</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold">{stats.lastAssessment.weight}kg</div>
+                    <p className="text-xs text-muted-foreground">peso</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold">{stats.lastAssessment.height}cm</div>
+                    <p className="text-xs text-muted-foreground">altura</p>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Peso</p>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">
-                  {stats.lastAssessment.height}cm
+
+              {/* IMC e Composição */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground">COMPOSIÇÃO CORPORAL</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-primary">
+                      {stats.lastAssessment.bmi || bmi || '--'}
+                    </div>
+                    <p className="text-xs text-muted-foreground">IMC</p>
+                    {bmiCategory && (
+                      <p className={`text-xs ${bmiCategory.color}`}>
+                        {bmiCategory.label}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold">
+                      {stats.lastAssessment.body_fat_percentage || '--'}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">gordura</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold">
+                      {stats.lastAssessment.muscle_mass || '--'}kg
+                    </div>
+                    <p className="text-xs text-muted-foreground">músculo</p>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Altura</p>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">
-                  {stats.lastAssessment.body_fat_percentage || '--'}%
-                </div>
-                <p className="text-sm text-muted-foreground">% Gordura</p>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">
-                  {stats.lastAssessment.muscle_mass || '--'}kg
-                </div>
-                <p className="text-sm text-muted-foreground">Massa Muscular</p>
               </div>
             </div>
           </CardContent>

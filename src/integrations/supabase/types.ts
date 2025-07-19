@@ -429,6 +429,7 @@ export type Database = {
       }
       physical_assessments: {
         Row: {
+          age: number | null
           assessment_date: string
           bmi: number | null
           body_fat_percentage: number | null
@@ -442,6 +443,7 @@ export type Database = {
           weight: number | null
         }
         Insert: {
+          age?: number | null
           assessment_date?: string
           bmi?: number | null
           body_fat_percentage?: number | null
@@ -455,6 +457,7 @@ export type Database = {
           weight?: number | null
         }
         Update: {
+          age?: number | null
           assessment_date?: string
           bmi?: number | null
           body_fat_percentage?: number | null
@@ -760,6 +763,10 @@ export type Database = {
       calculate_bmi: {
         Args: { weight: number; height: number }
         Returns: number
+      }
+      calculate_bmi_with_classification: {
+        Args: { weight: number; height: number }
+        Returns: Json
       }
       get_user_role: {
         Args: { user_uuid: string }
