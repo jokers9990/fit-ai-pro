@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Users, 
   Plus, 
@@ -13,7 +14,10 @@ import {
   Apple, 
   TrendingUp,
   MessageCircle,
-  Calendar
+  Calendar,
+  Activity,
+  Eye,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,6 +34,14 @@ interface Student {
   diet_plans?: any[];
 }
 
+interface PhysicalAssessment {
+  weight: number;
+  height: number;
+  body_fat_percentage?: number;
+  muscle_mass?: number;
+  notes?: string;
+}
+
 export function InstructorDashboard() {
   const { user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
@@ -37,6 +49,16 @@ export function InstructorDashboard() {
   const [loading, setLoading] = useState(true);
   const [studentEmail, setStudentEmail] = useState('');
   const [addingStudent, setAddingStudent] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [assessmentForm, setAssessmentForm] = useState<PhysicalAssessment>({
+    weight: 0,
+    height: 0,
+    body_fat_percentage: 0,
+    muscle_mass: 0,
+    notes: ''
+  });
+  const [creatingAssessment, setCreatingAssessment] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -103,27 +125,32 @@ export function InstructorDashboard() {
       const studentsWithCounts = await Promise.all(
         studentsData.map(async (student) => {
           try {
-            // Fetch counts in parallel
+            // Fetch actual data, not just counts
             const [assessmentsRes, workoutsRes, dietsRes] = await Promise.all([
               supabase
                 .from('physical_assessments')
-                .select('id', { count: 'exact' })
-                .eq('user_id', student.user_id),
+                .select('*')
+                .eq('user_id', student.user_id)
+                .order('created_at', { ascending: false }),
               supabase
                 .from('workout_plans')
-                .select('id', { count: 'exact' })
-                .eq('user_id', student.user_id),
+                .select('*')
+                .eq('user_id', student.user_id)
+                .eq('is_active', true)
+                .order('created_at', { ascending: false }),
               supabase
                 .from('diet_plans')
-                .select('id', { count: 'exact' })
+                .select('*')
                 .eq('user_id', student.user_id)
+                .eq('is_active', true)
+                .order('created_at', { ascending: false })
             ]);
 
             return {
               ...student,
-              physical_assessments: new Array(assessmentsRes.count || 0),
-              workout_plans: new Array(workoutsRes.count || 0),
-              diet_plans: new Array(dietsRes.count || 0)
+              physical_assessments: assessmentsRes.data || [],
+              workout_plans: workoutsRes.data || [],
+              diet_plans: dietsRes.data || []
             };
           } catch (error) {
             console.error('Error fetching additional data for student:', student.user_id, error);
@@ -234,6 +261,51 @@ export function InstructorDashboard() {
       });
     } finally {
       setAddingStudent(false);
+    }
+  };
+
+  const createPhysicalAssessment = async () => {
+    if (!selectedStudent) return;
+    
+    try {
+      setCreatingAssessment(true);
+      
+      // Calculate BMI
+      const heightInM = assessmentForm.height / 100;
+      const bmi = assessmentForm.weight / (heightInM * heightInM);
+      
+      const { error } = await supabase
+        .from('physical_assessments')
+        .insert({
+          user_id: selectedStudent.user_id,
+          instructor_id: user?.id,
+          weight: assessmentForm.weight,
+          height: assessmentForm.height,
+          body_fat_percentage: assessmentForm.body_fat_percentage || null,
+          muscle_mass: assessmentForm.muscle_mass || null,
+          bmi: Math.round(bmi * 100) / 100,
+          notes: assessmentForm.notes || null
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Avaliação física criada com sucesso!"
+      });
+      
+      setIsDialogOpen(false);
+      setAssessmentForm({ weight: 0, height: 0, body_fat_percentage: 0, muscle_mass: 0, notes: '' });
+      fetchStudents(); // Refresh data
+    } catch (error) {
+      console.error('Error creating assessment:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Erro ao criar avaliação física"
+      });
+    } finally {
+      setCreatingAssessment(false);
     }
   };
 
@@ -470,24 +542,131 @@ export function InstructorDashboard() {
                   <Badge variant="secondary">{student.physical_assessments?.length || 0}</Badge>
                 </div>
                 
-                <div className="flex gap-2 pt-2">
-                  <Button 
-                    size="sm" 
-                    onClick={() => generateWorkoutPlan(student.user_id)}
-                    className="flex-1"
-                  >
-                    <Dumbbell className="mr-1 h-3 w-3" />
-                    Treino
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => generateDietPlan(student.user_id)}
-                    className="flex-1"
-                  >
-                    <Apple className="mr-1 h-3 w-3" />
-                    Dieta
-                  </Button>
+                <div className="space-y-2 pt-2">
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      onClick={() => generateWorkoutPlan(student.user_id)}
+                      className="flex-1"
+                    >
+                      <Dumbbell className="mr-1 h-3 w-3" />
+                      Treino
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => generateDietPlan(student.user_id)}
+                      className="flex-1"
+                    >
+                      <Apple className="mr-1 h-3 w-3" />
+                      Dieta
+                    </Button>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Dialog open={isDialogOpen && selectedStudent?.id === student.id} onOpenChange={(open) => {
+                      if (open) {
+                        setSelectedStudent(student);
+                        setIsDialogOpen(true);
+                      } else {
+                        setIsDialogOpen(false);
+                        setSelectedStudent(null);
+                      }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button 
+                          size="sm" 
+                          variant="secondary"
+                          className="flex-1"
+                        >
+                          <Activity className="mr-1 h-3 w-3" />
+                          Avaliação
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Avaliação Física - {student.full_name}</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="weight">Peso (kg)</Label>
+                              <Input
+                                id="weight"
+                                type="number"
+                                value={assessmentForm.weight}
+                                onChange={(e) => setAssessmentForm({...assessmentForm, weight: Number(e.target.value)})}
+                                placeholder="70.5"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="height">Altura (cm)</Label>
+                              <Input
+                                id="height"
+                                type="number"
+                                value={assessmentForm.height}
+                                onChange={(e) => setAssessmentForm({...assessmentForm, height: Number(e.target.value)})}
+                                placeholder="175"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="body_fat">% Gordura (opcional)</Label>
+                              <Input
+                                id="body_fat"
+                                type="number"
+                                value={assessmentForm.body_fat_percentage}
+                                onChange={(e) => setAssessmentForm({...assessmentForm, body_fat_percentage: Number(e.target.value)})}
+                                placeholder="15.5"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="muscle_mass">Massa Muscular kg (opcional)</Label>
+                              <Input
+                                id="muscle_mass"
+                                type="number"
+                                value={assessmentForm.muscle_mass}
+                                onChange={(e) => setAssessmentForm({...assessmentForm, muscle_mass: Number(e.target.value)})}
+                                placeholder="60.2"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="notes">Observações (opcional)</Label>
+                            <Textarea
+                              id="notes"
+                              value={assessmentForm.notes}
+                              onChange={(e) => setAssessmentForm({...assessmentForm, notes: e.target.value})}
+                              placeholder="Observações sobre a avaliação física..."
+                              rows={3}
+                            />
+                          </div>
+                          
+                          <Button 
+                            onClick={createPhysicalAssessment}
+                            disabled={creatingAssessment || !assessmentForm.weight || !assessmentForm.height}
+                            className="w-full"
+                          >
+                            {creatingAssessment ? 'Criando...' : 'Criar Avaliação'}
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                    
+                    {(student.workout_plans && student.workout_plans.length > 0) && (
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => window.open(`/dashboard/workout/${student.workout_plans[0].id}`, '_blank')}
+                      >
+                        <Eye className="mr-1 h-3 w-3" />
+                        Ver Treino
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardContent>
