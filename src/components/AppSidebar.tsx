@@ -27,15 +27,27 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 
-const menuItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: Home },
-  { title: 'Perfil', url: '/dashboard/profile', icon: User },
-  { title: 'Treinos', url: '/dashboard/workouts', icon: Dumbbell },
-  { title: 'Dietas', url: '/dashboard/nutrition', icon: Apple },
-  { title: 'Chat IA', url: '/dashboard/chat', icon: MessageCircle },
-  { title: 'Progresso', url: '/dashboard/progress', icon: TrendingUp },
-  { title: 'Fotos', url: '/dashboard/photos', icon: Camera },
-];
+const getMenuItems = (isInstructor: boolean) => {
+  if (isInstructor) {
+    return [
+      { title: 'Dashboard', url: '/dashboard', icon: Home },
+      { title: 'Alunos', url: '/dashboard/students', icon: User },
+      { title: 'Planos', url: '/dashboard/plans', icon: Dumbbell },
+      { title: 'Chat IA', url: '/dashboard/chat', icon: MessageCircle },
+      { title: 'Relatórios', url: '/dashboard/reports', icon: TrendingUp },
+    ];
+  }
+  
+  return [
+    { title: 'Dashboard', url: '/dashboard', icon: Home },
+    { title: 'Perfil', url: '/dashboard/profile', icon: User },
+    { title: 'Treinos', url: '/dashboard/workouts', icon: Dumbbell },
+    { title: 'Dietas', url: '/dashboard/nutrition', icon: Apple },
+    { title: 'Chat IA', url: '/dashboard/chat', icon: MessageCircle },
+    { title: 'Progresso', url: '/dashboard/progress', icon: TrendingUp },
+    { title: 'Fotos', url: '/dashboard/photos', icon: Camera },
+  ];
+};
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -45,6 +57,8 @@ export function AppSidebar() {
   const currentPath = location.pathname;
   const isActive = (path: string) => currentPath === path;
   const collapsed = state === 'collapsed';
+  const isInstructor = profile?.role === 'instructor' || profile?.role === 'admin';
+  const menuItems = getMenuItems(isInstructor);
 
   const handleSignOut = async () => {
     await signOut();
