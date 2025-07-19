@@ -61,6 +61,14 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				gym: {
+					primary: 'hsl(var(--gym-primary))',
+					'primary-dark': 'hsl(var(--gym-primary-dark))',
+					secondary: 'hsl(var(--gym-secondary))',
+					accent: 'hsl(var(--gym-accent))',
+					dark: 'hsl(var(--gym-dark))',
+					darker: 'hsl(var(--gym-darker))'
 				}
 			},
 			borderRadius: {
