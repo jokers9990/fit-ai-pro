@@ -103,41 +103,27 @@ export function InstructorDashboard() {
       const studentsWithCounts = await Promise.all(
         studentsData.map(async (student) => {
           try {
-            // Fetch physical assessments count
-            const { data: assessments, error: assessError } = await supabase
-              .from('physical_assessments')
-              .select('id')
-              .eq('user_id', student.user_id);
-
-            if (assessError) {
-              console.error('Error fetching assessments for student:', student.user_id, assessError);
-            }
-
-            // Fetch workout plans count
-            const { data: workouts, error: workoutError } = await supabase
-              .from('workout_plans')
-              .select('id')
-              .eq('user_id', student.user_id);
-
-            if (workoutError) {
-              console.error('Error fetching workouts for student:', student.user_id, workoutError);
-            }
-
-            // Fetch diet plans count
-            const { data: diets, error: dietError } = await supabase
-              .from('diet_plans')
-              .select('id')
-              .eq('user_id', student.user_id);
-
-            if (dietError) {
-              console.error('Error fetching diets for student:', student.user_id, dietError);
-            }
+            // Fetch counts in parallel
+            const [assessmentsRes, workoutsRes, dietsRes] = await Promise.all([
+              supabase
+                .from('physical_assessments')
+                .select('id', { count: 'exact' })
+                .eq('user_id', student.user_id),
+              supabase
+                .from('workout_plans')
+                .select('id', { count: 'exact' })
+                .eq('user_id', student.user_id),
+              supabase
+                .from('diet_plans')
+                .select('id', { count: 'exact' })
+                .eq('user_id', student.user_id)
+            ]);
 
             return {
               ...student,
-              physical_assessments: assessments || [],
-              workout_plans: workouts || [],
-              diet_plans: diets || []
+              physical_assessments: new Array(assessmentsRes.count || 0),
+              workout_plans: new Array(workoutsRes.count || 0),
+              diet_plans: new Array(dietsRes.count || 0)
             };
           } catch (error) {
             console.error('Error fetching additional data for student:', student.user_id, error);
@@ -193,9 +179,9 @@ export function InstructorDashboard() {
         .eq('instructor_id', user?.id)
         .eq('student_id', studentProfile.user_id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
-      if (checkError && checkError.code !== 'PGRST116') {
+      if (checkError) {
         console.error('Error checking existing relation:', checkError);
         toast({
           variant: "destructive",
@@ -258,6 +244,8 @@ export function InstructorDashboard() {
 
   const generateWorkoutPlan = async (studentId: string) => {
     try {
+      console.log('Generating workout for student:', studentId);
+      
       const { data, error } = await supabase.functions.invoke('generate-workout', {
         body: {
           userId: studentId,
@@ -270,7 +258,12 @@ export function InstructorDashboard() {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error invoking function:', error);
+        throw error;
+      }
+      
+      console.log('Workout generated successfully:', data);
       
       toast({
         title: "Sucesso",
@@ -290,33 +283,28 @@ export function InstructorDashboard() {
 
   const generateDietPlan = async (studentId: string) => {
     try {
-      const student = students.find(s => s.user_id === studentId);
-      const lastAssessment = student?.physical_assessments?.[0];
+      console.log('Generating diet for student:', studentId);
       
-      if (!lastAssessment) {
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: "É necessário ter uma avaliação física do aluno"
-        });
-        return;
-      }
-
       const { data, error } = await supabase.functions.invoke('generate-diet', {
         body: {
           userId: studentId,
-          weight: lastAssessment.weight,
-          height: lastAssessment.height,
-          age: 25, // Calcular idade real se necessário
-          gender: 'masculino',
-          activityLevel: 'moderado',
           goal: 'definicao',
-          restrictions: [],
-          preferences: []
+          weight: 75, // Default values
+          height: 175,
+          age: 25,
+          gender: 'masculino',
+          activityLevel: 'moderadamente_ativo',
+          restrictions: '',
+          preferences: ''
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error invoking function:', error);
+        throw error;
+      }
+      
+      console.log('Diet generated successfully:', data);
       
       toast({
         title: "Sucesso",

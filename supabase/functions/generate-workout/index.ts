@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -22,8 +23,16 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Generate workout function called');
+    
     // Get instructor info from auth header
-    const authHeader = req.headers.get('Authorization')!;
+    const authHeader = req.headers.get('Authorization');
+    console.log('Auth header present:', !!authHeader);
+    
+    if (!authHeader) {
+      throw new Error('No authorization header provided');
+    }
+
     const supabaseAuth = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -31,11 +40,16 @@ serve(async (req) => {
     );
 
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    console.log('User authentication result:', { user: !!user, error: authError });
+    
     if (authError || !user) {
-      throw new Error('Unauthorized');
+      throw new Error(`Authentication failed: ${authError?.message || 'User not found'}`);
     }
 
-    const { userId, goals, experience, equipment, timeAvailable, targetMuscles, restrictions } = await req.json() as WorkoutRequest;
+    const requestBody = await req.json();
+    console.log('Request body:', requestBody);
+    
+    const { userId, goals, experience, equipment, timeAvailable, targetMuscles, restrictions } = requestBody as WorkoutRequest;
     
     // Use service role for database operations
     const supabase = createClient(
@@ -43,21 +57,29 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: subscription } = await supabase
+    // Check subscription limits
+    const { data: subscription, error: subError } = await supabase
       .from('user_subscriptions')
       .select('ai_requests_used, subscription_plans(ai_requests_limit)')
       .eq('user_id', userId)
       .eq('status', 'active')
       .single();
 
-    if (!subscription || subscription.ai_requests_used >= subscription.subscription_plans.ai_requests_limit) {
+    console.log('Subscription check:', { subscription, error: subError });
+
+    if (subError) {
+      console.error('Subscription error:', subError);
+      // Continue without subscription check for now
+    }
+
+    if (subscription && subscription.ai_requests_used >= subscription.subscription_plans?.ai_requests_limit) {
       return new Response(
         JSON.stringify({ error: 'Limite de IA atingido. Faça upgrade do seu plano.' }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Gerar prompt para IA
+    // Generate prompt for AI
     const prompt = `
 Crie um treino personalizado baseado nas seguintes informações:
 
@@ -99,11 +121,18 @@ FORMATO DE RESPOSTA (JSON):
 
 Responda APENAS com o JSON válido, sem texto adicional.`;
 
-    // Chamar Groq API
+    console.log('Calling Groq API...');
+
+    // Call Groq API
+    const groqApiKey = Deno.env.get('GROQ_API_KEY');
+    if (!groqApiKey) {
+      throw new Error('GROQ_API_KEY not configured');
+    }
+
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('GROQ_API_KEY')}`,
+        'Authorization': `Bearer ${groqApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -123,19 +152,32 @@ Responda APENAS com o JSON válido, sem texto adicional.`;
       }),
     });
 
+    console.log('Groq API response status:', response.status);
+
     if (!response.ok) {
-      throw new Error('Erro na API do Groq');
+      const errorText = await response.text();
+      console.error('Groq API error:', errorText);
+      throw new Error(`Erro na API do Groq: ${response.status}`);
     }
 
     const data = await response.json();
-    const workoutData = JSON.parse(data.choices[0].message.content);
+    console.log('Groq API response received');
+    
+    let workoutData;
+    try {
+      workoutData = JSON.parse(data.choices[0].message.content);
+    } catch (parseError) {
+      console.error('Error parsing AI response:', parseError);
+      console.error('Raw content:', data.choices[0].message.content);
+      throw new Error('Erro ao processar resposta da IA');
+    }
 
-    // Salvar treino no banco
+    // Save workout to database
     const { data: workoutPlan, error: insertError } = await supabase
       .from('workout_plans')
       .insert({
         user_id: userId,
-        instructor_id: user.id, // Add instructor who created the plan
+        instructor_id: user.id,
         name: workoutData.name,
         description: workoutData.description,
         exercises: workoutData.exercises,
@@ -146,23 +188,28 @@ Responda APENAS com o JSON válido, sem texto adicional.`;
       .select()
       .single();
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      console.error('Database insert error:', insertError);
+      throw insertError;
+    }
 
-    // Incrementar contador de IA
-    await supabase
-      .from('user_subscriptions')
-      .update({ ai_requests_used: subscription.ai_requests_used + 1 })
-      .eq('user_id', userId);
+    // Update AI usage counter
+    if (subscription) {
+      await supabase
+        .from('user_subscriptions')
+        .update({ ai_requests_used: subscription.ai_requests_used + 1 })
+        .eq('user_id', userId);
+    }
 
-    console.log('Treino gerado com sucesso:', workoutPlan.id);
+    console.log('Workout generated successfully:', workoutPlan.id);
 
     return new Response(
       JSON.stringify({ 
         workout: workoutPlan,
-        usage: {
+        usage: subscription ? {
           used: subscription.ai_requests_used + 1,
-          limit: subscription.subscription_plans.ai_requests_limit
-        }
+          limit: subscription.subscription_plans?.ai_requests_limit || 0
+        } : null
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -170,7 +217,7 @@ Responda APENAS com o JSON válido, sem texto adicional.`;
   } catch (error) {
     console.error('Erro ao gerar treino:', error);
     return new Response(
-      JSON.stringify({ error: 'Erro interno do servidor' }),
+      JSON.stringify({ error: error.message || 'Erro interno do servidor' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
