@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -6,6 +7,7 @@ import { StudentDashboard } from '@/components/student/StudentDashboard';
 import { ChatIA } from '@/components/ChatIA';
 import { WorkoutPlan } from '@/pages/WorkoutPlan';
 import { DietPlan } from '@/pages/DietPlan';
+
 export function DashboardContent() {
   const { profile } = useAuth();
   
@@ -28,12 +30,21 @@ export function DashboardContent() {
 function DashboardHome() {
   const { profile } = useAuth();
   
+  // Log detalhado para debug
+  console.log('DashboardHome - Profile:', profile);
+  console.log('DashboardHome - Profile role:', profile?.role);
+  console.log('DashboardHome - Profile email:', profile?.email);
+  
   // Verificar se é instrutor ou aluno
   const isInstructor = profile?.role === 'instructor' || profile?.role === 'admin';
   
+  console.log('DashboardHome - Is instructor:', isInstructor);
+  
   if (isInstructor) {
+    console.log('Rendering InstructorDashboard');
     return <InstructorDashboard />;
   }
   
+  console.log('Rendering StudentDashboard');
   return <StudentDashboard />;
 }

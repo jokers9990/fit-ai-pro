@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -71,23 +70,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Wait a bit more to ensure the trigger has completed
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      const { data, error } = await supabase
+      // Buscar o perfil sem o relacionamento por enquanto para evitar erro
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          user_subscriptions(
-            *,
-            subscription_plans(*)
-          )
-        `)
+        .select('*')
         .eq('user_id', userId)
         .single();
 
-      if (error) {
-        console.error('Error fetching profile:', error);
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
         
         // If profile doesn't exist, try to create it manually
-        if (error.code === 'PGRST116') {
+        if (profileError.code === 'PGRST116') {
           console.log('Profile not found, attempting to create...');
           await createMissingProfile(userId);
           return;
@@ -95,8 +89,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      console.log('Profile fetched successfully:', data);
-      setProfile(data);
+      // Buscar assinatura separadamente
+      const { data: subscriptionData, error: subscriptionError } = await supabase
+        .from('user_subscriptions')
+        .select(`
+          *,
+          subscription_plans(*)
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .single();
+
+      if (subscriptionError && subscriptionError.code !== 'PGRST116') {
+        console.error('Error fetching subscription:', subscriptionError);
+      }
+
+      // Combinar os dados
+      const completeProfile = {
+        ...profileData,
+        user_subscriptions: subscriptionData ? [subscriptionData] : []
+      };
+
+      console.log('Profile fetched successfully:', completeProfile);
+      console.log('User role:', completeProfile.role);
+      setProfile(completeProfile);
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
     }
