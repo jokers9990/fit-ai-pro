@@ -45,6 +45,8 @@ export function InstructorDashboard() {
   const fetchStudents = async () => {
     try {
       setLoading(true);
+      console.log('Fetching students for instructor:', user?.id);
+      
       const { data: instructorStudents, error } = await supabase
         .from('instructor_students')
         .select(`
@@ -54,33 +56,97 @@ export function InstructorDashboard() {
             user_id,
             full_name,
             email,
-            created_at,
-            physical_assessments(*),
-            workout_plans(*),
-            diet_plans(*)
+            created_at
           )
         `)
+        .eq('instructor_id', user?.id)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching instructor students:', error);
+        throw error;
+      }
+
+      console.log('Instructor students data:', instructorStudents);
+
+      if (!instructorStudents || instructorStudents.length === 0) {
+        console.log('No students found for this instructor');
+        setStudents([]);
+        setLoading(false);
+        return;
+      }
 
       // Transform data to match expected format
-      const studentsData = instructorStudents?.map(item => {
+      const studentsData = instructorStudents.map(item => {
         const profile = item.profiles;
+        if (!profile) {
+          console.warn('Profile not found for student:', item.student_id);
+          return null;
+        }
+        
         return {
           id: profile.id,
           user_id: profile.user_id,
           full_name: profile.full_name,
           email: profile.email,
           created_at: profile.created_at,
-          physical_assessments: Array.isArray(profile.physical_assessments) ? profile.physical_assessments : [],
-          workout_plans: Array.isArray(profile.workout_plans) ? profile.workout_plans : [],
-          diet_plans: Array.isArray(profile.diet_plans) ? profile.diet_plans : []
+          physical_assessments: [],
+          workout_plans: [],
+          diet_plans: []
         };
-      }).filter(Boolean) || [];
-      
-      setStudents(studentsData);
+      }).filter(Boolean) as Student[];
+
+      console.log('Processed students data:', studentsData);
+
+      // Fetch additional data for each student
+      const studentsWithCounts = await Promise.all(
+        studentsData.map(async (student) => {
+          try {
+            // Fetch physical assessments count
+            const { data: assessments, error: assessError } = await supabase
+              .from('physical_assessments')
+              .select('id')
+              .eq('user_id', student.user_id);
+
+            if (assessError) {
+              console.error('Error fetching assessments for student:', student.user_id, assessError);
+            }
+
+            // Fetch workout plans count
+            const { data: workouts, error: workoutError } = await supabase
+              .from('workout_plans')
+              .select('id')
+              .eq('user_id', student.user_id);
+
+            if (workoutError) {
+              console.error('Error fetching workouts for student:', student.user_id, workoutError);
+            }
+
+            // Fetch diet plans count
+            const { data: diets, error: dietError } = await supabase
+              .from('diet_plans')
+              .select('id')
+              .eq('user_id', student.user_id);
+
+            if (dietError) {
+              console.error('Error fetching diets for student:', student.user_id, dietError);
+            }
+
+            return {
+              ...student,
+              physical_assessments: assessments || [],
+              workout_plans: workouts || [],
+              diet_plans: diets || []
+            };
+          } catch (error) {
+            console.error('Error fetching additional data for student:', student.user_id, error);
+            return student;
+          }
+        })
+      );
+
+      setStudents(studentsWithCounts);
     } catch (error) {
       console.error('Erro ao buscar alunos:', error);
       toast({
@@ -98,20 +164,52 @@ export function InstructorDashboard() {
     
     try {
       setAddingStudent(true);
+      console.log('Adding student with email:', studentEmail);
       
       // Find the student by email
       const { data: studentProfile, error: findError } = await supabase
         .from('profiles')
-        .select('user_id, full_name')
+        .select('user_id, full_name, email')
         .eq('email', studentEmail.toLowerCase().trim())
         .eq('role', 'student')
         .single();
 
       if (findError || !studentProfile) {
+        console.error('Student not found:', findError);
         toast({
           variant: "destructive",
           title: "Erro",
           description: "Aluno não encontrado ou não é um estudante válido"
+        });
+        return;
+      }
+
+      console.log('Student profile found:', studentProfile);
+
+      // Check if student is already in the list
+      const { data: existingRelation, error: checkError } = await supabase
+        .from('instructor_students')
+        .select('id')
+        .eq('instructor_id', user?.id)
+        .eq('student_id', studentProfile.user_id)
+        .eq('is_active', true)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking existing relation:', checkError);
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Erro ao verificar relação existente"
+        });
+        return;
+      }
+
+      if (existingRelation) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Este aluno já está na sua lista"
         });
         return;
       }
@@ -125,20 +223,12 @@ export function InstructorDashboard() {
         });
 
       if (addError) {
-        if (addError.code === '23505') { // Unique constraint violation
-          toast({
-            variant: "destructive", 
-            title: "Erro",
-            description: "Este aluno já está na sua lista"
-          });
-        } else {
-          console.error('Error adding student:', addError);
-          toast({
-            variant: "destructive",
-            title: "Erro", 
-            description: "Erro ao adicionar aluno"
-          });
-        }
+        console.error('Error adding student:', addError);
+        toast({
+          variant: "destructive",
+          title: "Erro", 
+          description: "Erro ao adicionar aluno"
+        });
         return;
       }
 
