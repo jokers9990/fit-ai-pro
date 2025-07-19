@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { 
   Users, 
   Plus, 
@@ -33,6 +35,8 @@ export function InstructorDashboard() {
   const [students, setStudents] = useState<Student[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [studentEmail, setStudentEmail] = useState('');
+  const [addingStudent, setAddingStudent] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -40,30 +44,41 @@ export function InstructorDashboard() {
 
   const fetchStudents = async () => {
     try {
-      // Buscar todos os perfis de alunos
-      const { data, error } = await supabase
-        .from('profiles')
+      setLoading(true);
+      const { data: instructorStudents, error } = await supabase
+        .from('instructor_students')
         .select(`
-          *,
-          physical_assessments(*),
-          workout_plans(*),
-          diet_plans(*)
+          student_id,
+          profiles!instructor_students_student_id_fkey (
+            id,
+            user_id,
+            full_name,
+            email,
+            created_at,
+            physical_assessments(*),
+            workout_plans(*),
+            diet_plans(*)
+          )
         `)
-        .eq('role', 'student');
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      // Mapear os dados para o formato correto
-      const studentsData = (data || []).map(profile => ({
-        id: profile.id,
-        user_id: profile.user_id,
-        full_name: profile.full_name,
-        email: profile.email,
-        created_at: profile.created_at,
-        physical_assessments: Array.isArray(profile.physical_assessments) ? profile.physical_assessments : [],
-        workout_plans: Array.isArray(profile.workout_plans) ? profile.workout_plans : [],
-        diet_plans: Array.isArray(profile.diet_plans) ? profile.diet_plans : []
-      }));
+
+      // Transform data to match expected format
+      const studentsData = instructorStudents?.map(item => {
+        const profile = item.profiles;
+        return {
+          id: profile.id,
+          user_id: profile.user_id,
+          full_name: profile.full_name,
+          email: profile.email,
+          created_at: profile.created_at,
+          physical_assessments: Array.isArray(profile.physical_assessments) ? profile.physical_assessments : [],
+          workout_plans: Array.isArray(profile.workout_plans) ? profile.workout_plans : [],
+          diet_plans: Array.isArray(profile.diet_plans) ? profile.diet_plans : []
+        };
+      }).filter(Boolean) || [];
       
       setStudents(studentsData);
     } catch (error) {
@@ -75,6 +90,74 @@ export function InstructorDashboard() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const addStudent = async () => {
+    if (!studentEmail.trim()) return;
+    
+    try {
+      setAddingStudent(true);
+      
+      // Find the student by email
+      const { data: studentProfile, error: findError } = await supabase
+        .from('profiles')
+        .select('user_id, full_name')
+        .eq('email', studentEmail.toLowerCase().trim())
+        .eq('role', 'student')
+        .single();
+
+      if (findError || !studentProfile) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Aluno não encontrado ou não é um estudante válido"
+        });
+        return;
+      }
+
+      // Add the student to instructor's list
+      const { error: addError } = await supabase
+        .from('instructor_students')
+        .insert({
+          instructor_id: user?.id,
+          student_id: studentProfile.user_id
+        });
+
+      if (addError) {
+        if (addError.code === '23505') { // Unique constraint violation
+          toast({
+            variant: "destructive", 
+            title: "Erro",
+            description: "Este aluno já está na sua lista"
+          });
+        } else {
+          console.error('Error adding student:', addError);
+          toast({
+            variant: "destructive",
+            title: "Erro", 
+            description: "Erro ao adicionar aluno"
+          });
+        }
+        return;
+      }
+
+      toast({
+        title: "Sucesso",
+        description: `Aluno ${studentProfile.full_name} adicionado com sucesso!`
+      });
+      
+      setStudentEmail('');
+      fetchStudents(); // Refresh the list
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Erro ao adicionar aluno"
+      });
+    } finally {
+      setAddingStudent(false);
     }
   };
 
@@ -192,10 +275,38 @@ export function InstructorDashboard() {
           <h1 className="text-3xl font-bold">Painel do Instrutor</h1>
           <p className="text-muted-foreground">Gerencie seus alunos e crie planos personalizados</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Adicionar Aluno
-        </Button>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Adicionar Aluno
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Adicionar Novo Aluno</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="email">Email do Aluno</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="aluno@email.com"
+                  value={studentEmail}
+                  onChange={(e) => setStudentEmail(e.target.value)}
+                />
+              </div>
+              <Button 
+                onClick={addStudent} 
+                disabled={addingStudent || !studentEmail.trim()}
+                className="w-full"
+              >
+                {addingStudent ? 'Adicionando...' : 'Adicionar Aluno'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Estatísticas */}

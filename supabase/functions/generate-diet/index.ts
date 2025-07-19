@@ -24,9 +24,22 @@ serve(async (req) => {
   }
 
   try {
+    // Get instructor info from auth header
+    const authHeader = req.headers.get('Authorization')!;
+    const supabaseAuth = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
+      throw new Error('Unauthorized');
+    }
+
     const { userId, goal, weight, height, age, gender, activityLevel, restrictions, preferences } = await req.json() as DietRequest;
     
-    // Verificar limite de IA do usuário
+    // Use service role for database operations
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -164,6 +177,7 @@ Responda APENAS com o JSON válido, sem texto adicional.`;
       .from('diet_plans')
       .insert({
         user_id: userId,
+        instructor_id: user.id, // Add instructor who created the plan
         name: dietData.name,
         description: dietData.description,
         daily_calories: dietData.daily_calories,

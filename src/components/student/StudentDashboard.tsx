@@ -212,7 +212,7 @@ export function StudentDashboard() {
                         {plan.generated_by_ai ? 'Gerado com IA' : 'Criado manualmente'}
                       </p>
                     </div>
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" variant="outline" onClick={() => window.location.href = `/dashboard/workout/${plan.id}`}>
                       <Eye className="mr-2 h-4 w-4" />
                       Ver
                     </Button>
@@ -255,7 +255,7 @@ export function StudentDashboard() {
                         {plan.daily_calories} kcal/dia
                       </p>
                     </div>
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" variant="outline" onClick={() => window.location.href = `/dashboard/diet/${plan.id}`}>
                       <Eye className="mr-2 h-4 w-4" />
                       Ver
                     </Button>

@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { InstructorDashboard } from '@/components/instructor/InstructorDashboard';
 import { StudentDashboard } from '@/components/student/StudentDashboard';
 import { ChatIA } from '@/components/ChatIA';
+import { WorkoutPlan } from '@/pages/WorkoutPlan';
+import { DietPlan } from '@/pages/DietPlan';
 export function DashboardContent() {
   const { profile } = useAuth();
   
@@ -12,7 +14,9 @@ export function DashboardContent() {
       <Route index element={<DashboardHome />} />
       <Route path="profile" element={<div>Perfil em desenvolvimento...</div>} />
       <Route path="workouts" element={<div>Treinos em desenvolvimento...</div>} />
+      <Route path="workout/:id" element={<WorkoutPlan />} />
       <Route path="nutrition" element={<div>Nutrição em desenvolvimento...</div>} />
+      <Route path="diet/:id" element={<DietPlan />} />
       <Route path="chat" element={<ChatIA />} />
       <Route path="progress" element={<div>Progresso em desenvolvimento...</div>} />
       <Route path="photos" element={<div>Fotos em desenvolvimento...</div>} />
