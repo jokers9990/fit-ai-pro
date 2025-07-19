@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     console.log('Setting up auth listener...');
     
-    // Set up auth state listener
+    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user profile with a small delay to avoid deadlock
+          // Defer profile fetching to avoid deadlock
           setTimeout(() => {
             fetchUserProfile(session.user.id);
           }, 100);
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // Get initial session
+    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('Initial session:', session?.user?.email);
       setSession(session);
@@ -67,29 +67,82 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchUserProfile = async (userId: string) => {
     try {
       console.log('Fetching profile for user:', userId);
+      
+      // Wait a bit more to ensure the trigger has completed
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       const { data, error } = await supabase
         .from('profiles')
-        .select('*, user_subscriptions(*, subscription_plans(*))')
+        .select(`
+          *,
+          user_subscriptions(
+            *,
+            subscription_plans(*)
+          )
+        `)
         .eq('user_id', userId)
         .single();
 
       if (error) {
         console.error('Error fetching profile:', error);
+        
+        // If profile doesn't exist, try to create it manually
+        if (error.code === 'PGRST116') {
+          console.log('Profile not found, attempting to create...');
+          await createMissingProfile(userId);
+          return;
+        }
         return;
       }
 
-      console.log('Profile fetched:', data);
+      console.log('Profile fetched successfully:', data);
       setProfile(data);
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
     }
   };
 
+  const createMissingProfile = async (userId: string) => {
+    try {
+      const { data: authUser } = await supabase.auth.getUser();
+      if (!authUser.user) return;
+
+      console.log('Creating missing profile for user:', userId);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            user_id: userId,
+            full_name: authUser.user.user_metadata?.full_name || 'Usuário',
+            email: authUser.user.email || '',
+            role: 'student'
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating profile:', error);
+        return;
+      }
+
+      console.log('Profile created successfully:', data);
+      
+      // Now fetch the complete profile with subscription
+      setTimeout(() => fetchUserProfile(userId), 500);
+      
+    } catch (error) {
+      console.error('Error in createMissingProfile:', error);
+    }
+  };
+
   const signUp = async (email: string, password: string, fullName: string) => {
     console.log('Attempting signup for:', email);
-    const redirectUrl = `${window.location.origin}/`;
     
     try {
+      const redirectUrl = `${window.location.origin}/`;
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -102,7 +155,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       
       console.log('Signup response:', { data, error });
-      return { error };
+      
+      if (error) {
+        console.error('Signup error:', error);
+        return { error };
+      }
+
+      // If user is created successfully but needs email confirmation
+      if (data.user && !data.session) {
+        console.log('User created, waiting for email confirmation');
+        return { error: null };
+      }
+
+      return { error: null };
     } catch (err) {
       console.error('Signup error:', err);
       return { error: err };
